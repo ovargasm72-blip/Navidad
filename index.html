@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Feliz Navidad</title>
+  <meta name="description" content="Postal navideña — ¡Feliz Navidad! Música y nieve ligera.">
+  <style>
+    :root{ --card-w: 92%; --card-max-w: 420px; --accent: #0f6b8b; --text: #172023; }
+    html,body{height:100%;margin:0;padding:0;font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial;}
+    body{ display:flex; align-items:center; justify-content:center; background-color:#0b2a3a; color:var(--text); overflow:hidden; }
+    .bg{ position:fixed; inset:0; background-image: linear-gradient(180deg, rgba(7,20,30,0.55) 0%, rgba(12,28,40,0.55) 100%), url("BACKGROUND_RAW_URL"); background-size:cover; background-position:center; filter: contrast(1.05) saturate(1.05); z-index:0; will-change:transform; }
+    .bg::after{ content:""; position:absolute;inset:0; backdrop-filter: blur(6px); mix-blend-mode: normal; pointer-events:none; }
+    .card{ position:relative; z-index:2; width:var(--card-w); max-width:var(--card-max-w); margin:24px; padding:18px 18px 14px; border-radius:16px; background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(250,250,252,0.92)); box-shadow: 0 10px 30px rgba(2,12,20,0.45); text-align:center; -webkit-font-smoothing:antialiased; }
+    .avatar{ font-size:56px; line-height:1; margin-bottom:6px; }
+    .name{ font-size:22px; font-weight:700; color:var(--accent); margin-bottom:6px; }
+    .message{ font-size:16px; color:#233238; margin:10px 6px 16px; line-height:1.4; }
+    .footer{ font-size:13px; color:#55646b; }
+    .controls{ margin-top:12px; display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
+    button.control-btn{ appearance:none; border:0; background:#0f6b8b; color:white; padding:8px 12px; border-radius:10px; cursor:pointer; font-size:14px; }
+    button.control-btn[aria-pressed="true"]{ background:#0d5166; }
+    audio{ width:100%; border-radius:8px; outline:none; display:block; }
+    canvas#snowCanvas{ position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:1; }
+    @media(min-width:600px){ .card{padding:28px 28px 22px;} .avatar{font-size:70px;} .name{font-size:26px;} .message{font-size:18px;} }
+    @media (prefers-reduced-motion: reduce) { canvas#snowCanvas{ display:none; } }
+  </style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+  <canvas id="snowCanvas" aria-hidden="true"></canvas>
+  <main class="card" role="main" aria-label="Postal navideña">
+    <div class="avatar" id="avatar" aria-hidden="false">🎅</div>
+    <div class="name" id="greeting">¡Feliz Navidad, [Nombre]!</div>
+    <div class="message" id="message">Que esta Navidad te llene de alegría, paz y momentos inolvidables. Gracias por ser parte de este gran equipo.</div>
+    <div class="footer">Con cariño, Oscar 🎄</div>
+
+    <div class="controls" id="audioControls">
+      <!-- Si hay un archivo local assets/carol.mp3 se usará; si no, se reproduce el vídeo de YouTube proporcionado -->
+      <div id="mediaWrap">
+        <!-- Aquí se inyecta audio o iframe según disponibilidad -->
+      </div>
+      <button id="btnToggleMusic" class="control-btn" aria-pressed="false" type="button">Reproducir música</button>
+      <button id="btnMute" class="control-btn" aria-pressed="false" type="button">Silenciar</button>
+    </div>
+  </main>
+
+  <script>
+    // Parámetros: ?name=Ana&gender=f&audio=https://example.com/carol.mp3&youtube=RGqVS6ONO4Y&bg=https://...
+    const params = new URLSearchParams(location.search);
+    const n = params.get('name');
+    const g = params.get('gender');
+    const audioQ = params.get('audio');
+    const yt = params.get('youtube') || 'RGqVS6ONO4Y';
+    const bgQ = params.get('bg');
+
+    if(n) setFor(g||'m', decodeURIComponent(n));
+    if(bgQ) document.querySelector('.bg').style.backgroundImage = `linear-gradient(180deg, rgba(7,20,30,0.55) 0%, rgba(12,28,40,0.55) 100%), url("${bgQ}")`;
+
+    function setFor(gender, name){ document.getElementById('avatar').textContent = gender==='f' ? '👩‍🎄' : (gender==='m' ? '🎅' : '🎁'); document.getElementById('greeting').textContent = `¡Feliz Navidad, ${name}!`; }
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Insert media: prefer local assets/carol.mp3, else use YouTube embed
+    const mediaWrap = document.getElementById('mediaWrap');
+    const localAudioUrl = 'assets/carol.mp3';
+    // First try to fetch local audio (HEAD request) to see if exists
+    fetch(localAudioUrl, {method:'HEAD'})
+      .then(res=>{
+        if(res.ok){ setupAudio(localAudioUrl); }
+        else { setupYouTube(yt); }
+      })
+      .catch(()=>{
+        // cannot fetch local file (likely not present) -> use YouTube
+        setupYouTube(yt);
+      });
+
+    function setupAudio(src){
+      const audio = document.createElement('audio');
+      audio.id = 'bgAudio';
+      audio.loop = true;
+      audio.preload = 'auto';
+      audio.src = src;
+      audio.setAttribute('aria-label', 'Música navideña');
+      mediaWrap.appendChild(audio);
+      tryAutoPlay(audio);
+      setupButtons(audio);
+    }
+
+    function setupYouTube(id){
+      const iframe = document.createElement('iframe');
+      iframe.width = '560'; iframe.height='315';
+      iframe.src = `https://www.youtube-nocookie.com/embed/${id}?rel=0&loop=1&playlist=${id}`;
+      iframe.title = 'Música navideña (YouTube)';
+      iframe.frameBorder = '0';
+      iframe.allow = 'autoplay; encrypted-media';
+      iframe.style.maxWidth = '100%';
+      iframe.style.borderRadius = '8px';
+      mediaWrap.appendChild(iframe);
+      // Buttons will only control mute via postMessage if desired; keep simple: toggle focus/play instructions
+      const fakeAudio = { play: async()=>{}, pause: ()=>{}, muted: false };
+      setupButtons(fakeAudio);
+    }
+
+    function setupButtons(audioElem){
+      const btnToggle = document.getElementById('btnToggleMusic');
+      const btnMute = document.getElementById('btnMute');
+      let isPlaying = false;
+      let isMuted = false;
+
+      async function tryPlay(){ if(!audioElem.play) return; try{ await audioElem.play(); isPlaying=true; btnToggle.textContent='Pausar música'; btnToggle.setAttribute('aria-pressed','true'); }catch(e){ isPlaying=false; btnToggle.textContent='Reproducir música'; btnToggle.setAttribute('aria-pressed','false'); }}
+      function pause(){ if(audioElem.pause) audioElem.pause(); isPlaying=false; btnToggle.textContent='Reproducir música'; btnToggle.setAttribute('aria-pressed','false'); }
+
+      btnToggle.addEventListener('click', async ()=>{ if(isPlaying) pause(); else await tryPlay(); });
+      btnMute.addEventListener('click', ()=>{ isMuted=!isMuted; if('muted' in audioElem) audioElem.muted = isMuted; btnMute.textContent = isMuted ? 'Activar sonido' : 'Silenciar'; btnMute.setAttribute('aria-pressed', isMuted ? 'true' : 'false'); });
+
+      // Try autoplay if allowed and user doesn't prefer reduced motion
+      if(!reduceMotion){ setTimeout(tryPlay, 300); }
+
+      // Space key toggles
+      window.addEventListener('keydown', (e)=>{ if(e.code==='Space' && document.activeElement===document.body){ e.preventDefault(); btnToggle.click(); } });
+    }
+
+    // Snow effect (skip if reduced motion)
+    (function snowInit(){ if(reduceMotion) return; const canvas = document.getElementById('snowCanvas'); const ctx = canvas.getContext('2d'); let W = canvas.width = innerWidth; let H = canvas.height = innerHeight; const flakes = []; const count = Math.round(Math.max(60, Math.min(160, W / 6))); for(let i=0;i<count;i++){ flakes.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*3+1.2, s: Math.random()*0.6+0.4, a: Math.random()*Math.PI*2, ax: (Math.random()-0.5)*0.002 }); } function resize(){ W = canvas.width = innerWidth; H = canvas.height = innerHeight; } addEventListener('resize', resize); function draw(){ ctx.clearRect(0,0,W,H); ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); for(let f of flakes){ ctx.moveTo(f.x, f.y); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2); } ctx.fill(); update(); requestAnimationFrame(draw); } function update(){ for(let f of flakes){ f.y += f.s + Math.pow(f.r,0.8)*0.2; f.x += Math.sin(f.a)*0.6 + f.ax*W; f.a += 0.01; if(f.y > H + 10){ f.y = -10; f.x = Math.random()*W; } if(f.x > W + 20) f.x = -20; if(f.x < -20) f.x = W + 20; } } draw(); })();
+  </script>
+</body>
+</html>
